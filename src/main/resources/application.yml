@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: gushing-backend
+
+ai:
+  deepseek:
+    # 通过 .env 文件注入，避免硬编码
+    api-key: ${DEEPSEEK_API_KEY}
+    base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
+    model: ${DEEPSEEK_MODEL:deepseek-v4-pro}
+    timeout-seconds: ${DEEPSEEK_TIMEOUT_SECONDS:60}
+  dashscope:
+    # 阿里云百炼 / 万相文生图（同样通过 .env 注入）
+    api-key: ${DASHSCOPE_API_KEY}
+    base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com}
+    t2i-model: ${DASHSCOPE_T2I_MODEL:wan2.6-t2i}
+    t2i-size: ${DASHSCOPE_T2I_SIZE:1280*1280}
+    timeout-seconds: ${DASHSCOPE_TIMEOUT_SECONDS:120}
+  minimax:
+    # MiniMax 海螺 图生视频（同样通过 .env 注入）
+    api-key: ${MINIMAX_API_KEY}
+    base-url: ${MINIMAX_BASE_URL:https://api.minimax.cn}
+    i2v-model: ${MINIMAX_I2V_MODEL:MiniMax-Hailuo-2.3}
+    i2v-duration: ${MINIMAX_I2V_DURATION:6}
+    i2v-resolution: ${MINIMAX_I2V_RESOLUTION:1080P}
+    poll-interval-seconds: ${MINIMAX_POLL_INTERVAL_SECONDS:5}
+    poll-max-seconds: ${MINIMAX_POLL_MAX_SECONDS:300}
