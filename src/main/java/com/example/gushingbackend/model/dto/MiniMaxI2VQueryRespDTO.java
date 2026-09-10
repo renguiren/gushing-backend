@@ -14,20 +14,12 @@ public class MiniMaxI2VQueryRespDTO {
     @com.fasterxml.jackson.annotation.JsonProperty("task_id")
     private String taskId;
 
-    /** 文件 ID（部分响应携带，可用于下载） */
+    /** 文件 ID（任务成功后返回，用于调用 file retrieve 换取视频下载地址） */
     @com.fasterxml.jackson.annotation.JsonProperty("file_id")
     private String fileId;
 
     /** 任务状态：Submitted / Processing / Success / Failed */
     private String status;
-
-    /** 生成视频的下载 URL（status=Success 时返回） */
-    @com.fasterxml.jackson.annotation.JsonProperty("download_url")
-    private String downloadUrl;
-
-    /** 视频在线播放/下载地址（部分版本返回在该字段） */
-    @com.fasterxml.jackson.annotation.JsonProperty("video_url")
-    private String videoUrl;
 
     /** 查询结果基础状态 */
     @com.fasterxml.jackson.annotation.JsonProperty("base_resp")

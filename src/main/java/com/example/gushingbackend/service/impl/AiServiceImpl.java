@@ -67,7 +67,14 @@ public class AiServiceImpl implements AiService {
 
     @Override
     public VideoGenerationBO videoGeneration(VideoGenerationBO bo) {
-        // 1. 提交异步任务
+        // 同步：提交后轮询直至完成或超时
+        submitVideoGeneration(bo);
+        pollVideoTask(bo);
+        return bo;
+    }
+
+    @Override
+    public VideoGenerationBO submitVideoGeneration(VideoGenerationBO bo) {
         MiniMaxI2VSubmitReqDTO reqDTO = buildVideoRequest(bo);
         MiniMaxI2VSubmitRespDTO submitResp = miniMaxClient.submitTask(reqDTO);
         if (submitResp == null || !StringUtils.hasText(submitResp.getTaskId())) {
@@ -78,9 +85,25 @@ public class AiServiceImpl implements AiService {
         }
         bo.setTaskId(submitResp.getTaskId());
         bo.setModel(reqDTO.getModel());
+        // 提交后标记为已提交，等待调用方按 taskId 查询最终结果
+        bo.setStatus("Submitted");
+        return bo;
+    }
 
-        // 2. 轮询查询直到 Success / Failed / 超时
-        pollVideoTask(bo);
+    @Override
+    public VideoGenerationBO queryVideoTask(VideoGenerationBO bo) {
+        MiniMaxI2VQueryRespDTO resp = miniMaxClient.queryTask(bo.getTaskId());
+        fillVideoResponse(bo, resp);
+        // 任务成功且拿到 file_id → 调用 file retrieve 换取视频下载地址
+        // MiniMax 查询任务只返回 file_id，视频地址需二次换取
+        if (resp != null
+                && STATUS_SUCCESS.equals(resp.getStatus())
+                && StringUtils.hasText(resp.getFileId())) {
+            String downloadUrl = miniMaxClient.retrieveFileUrl(resp.getFileId());
+            if (StringUtils.hasText(downloadUrl)) {
+                bo.setVideoUrl(downloadUrl);
+            }
+        }
         return bo;
     }
 
@@ -228,22 +251,20 @@ public class AiServiceImpl implements AiService {
     /**
      * 轮询 MiniMax 任务直到 Success / Failed / 超时。
      * 超时或失败时抛 RuntimeException，BO 中 status/videoUrl 会被更新。
+     * 复用 {@link #queryVideoTask} 进行单次查询。
      */
     private void pollVideoTask(VideoGenerationBO bo) {
         long intervalMs = miniMaxClient.getPollIntervalSeconds() * 1000L;
         long deadline = System.currentTimeMillis() + miniMaxClient.getPollMaxSeconds() * 1000L;
 
         while (System.currentTimeMillis() < deadline) {
-            MiniMaxI2VQueryRespDTO resp = miniMaxClient.queryTask(bo.getTaskId());
-            if (resp != null) {
-                fillVideoResponse(bo, resp);
-                String status = bo.getStatus();
-                if (STATUS_SUCCESS.equals(status)) {
-                    return;
-                }
-                if (STATUS_FAILED.equals(status)) {
-                    throw new RuntimeException("MiniMax 图生视频任务失败，taskId=" + bo.getTaskId());
-                }
+            queryVideoTask(bo);
+            String status = bo.getStatus();
+            if (STATUS_SUCCESS.equals(status)) {
+                return;
+            }
+            if (STATUS_FAILED.equals(status)) {
+                throw new RuntimeException("MiniMax 图生视频任务失败，taskId=" + bo.getTaskId());
             }
             try {
                 Thread.sleep(intervalMs);
@@ -255,17 +276,11 @@ public class AiServiceImpl implements AiService {
         throw new RuntimeException("MiniMax 图生视频任务轮询超时，taskId=" + bo.getTaskId());
     }
 
-    /** 将 MiniMax 查询响应 DTO 写回 BO。 */
+    /** 将 MiniMax 查询响应 DTO 的 status 写回 BO。视频下载地址由 queryVideoTask 单独换取。 */
     private void fillVideoResponse(VideoGenerationBO bo, MiniMaxI2VQueryRespDTO resp) {
         if (resp == null) {
             return;
         }
         bo.setStatus(resp.getStatus());
-        // 兼容 download_url 与 video_url 两种返回字段
-        if (StringUtils.hasText(resp.getDownloadUrl())) {
-            bo.setVideoUrl(resp.getDownloadUrl());
-        } else if (StringUtils.hasText(resp.getVideoUrl())) {
-            bo.setVideoUrl(resp.getVideoUrl());
-        }
     }
 }

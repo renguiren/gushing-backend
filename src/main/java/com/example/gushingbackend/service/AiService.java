@@ -30,13 +30,35 @@ public interface AiService {
     ImageGenerationBO imageGeneration(ImageGenerationBO bo);
 
     /**
-     * 调用 MiniMax 进行图生视频。
+     * 调用 MiniMax 进行图生视频（同步：提交后轮询直至完成或超时）。
      * <p>
-     * MiniMax 视频生成是异步任务，内部会提交任务并轮询直到完成（或超时），
+     * MiniMax 视频生成是异步任务，本方法在内部提交任务并轮询直到完成（或超时），
      * 对调用方表现为同步返回。BO 需提供 firstFrameImage（必填）与 prompt（必填）。
      *
      * @param bo 业务对象，至少需提供 prompt + firstFrameImage
      * @return 写入生成结果的业务对象（videoUrl/model/taskId/status 等已填充）
      */
     VideoGenerationBO videoGeneration(VideoGenerationBO bo);
+
+    /**
+     * 仅提交 MiniMax 图生视频任务，不等待完成。
+     * <p>
+     * 适用于工作流中"提交即返回"场景：提交后 BO 被填入 taskId/model，
+     * 调用方可后续用 {@link #queryVideoTask(VideoGenerationBO)} 按 taskId 查询结果，
+     * 避免长耗时视频生成阻塞调用方。
+     *
+     * @param bo 业务对象，至少需提供 prompt + firstFrameImage
+     * @return 写入 taskId/model 的业务对象（status=Submitted，videoUrl 未填充）
+     */
+    VideoGenerationBO submitVideoGeneration(VideoGenerationBO bo);
+
+    /**
+     * 按 taskId 查询 MiniMax 图生视频任务状态与结果。
+     * <p>
+     * 单次查询，不轮询。BO 需提供 taskId，返回时 status/videoUrl 已更新。
+     *
+     * @param bo 业务对象，需提供 taskId
+     * @return 写入 status/videoUrl 的业务对象
+     */
+    VideoGenerationBO queryVideoTask(VideoGenerationBO bo);
 }

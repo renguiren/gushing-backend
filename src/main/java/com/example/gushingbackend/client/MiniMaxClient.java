@@ -1,6 +1,7 @@
 package com.example.gushingbackend.client;
 
 import com.example.gushingbackend.config.MiniMaxProperties;
+import com.example.gushingbackend.model.dto.MiniMaxFileRetrieveRespDTO;
 import com.example.gushingbackend.model.dto.MiniMaxI2VQueryRespDTO;
 import com.example.gushingbackend.model.dto.MiniMaxI2VSubmitReqDTO;
 import com.example.gushingbackend.model.dto.MiniMaxI2VSubmitRespDTO;
@@ -10,7 +11,7 @@ import org.springframework.web.client.RestClient;
 
 /**
  * MiniMax 海螺 图生视频 API 客户端。
- * 封装对 MiniMax V1 异步接口的底层调用：提交任务 + 查询任务状态。
+ * 封装对 MiniMax V1 异步接口的底层调用：提交任务 + 查询任务状态 + 文件下载地址换取。
  * 对上层（Service）屏蔽 HTTP 细节。
  */
 @Component
@@ -21,6 +22,8 @@ public class MiniMaxClient {
     private static final String I2V_SUBMIT_PATH = "/v1/video_generation";
     /** 视频任务查询路径 */
     private static final String I2V_QUERY_PATH = "/v1/query/video_generation";
+    /** 文件下载地址换取路径 */
+    private static final String FILE_RETRIEVE_PATH = "/v1/files/retrieve";
 
     private final RestClient miniMaxRestClient;
     private final MiniMaxProperties miniMaxProperties;
@@ -43,7 +46,7 @@ public class MiniMaxClient {
      * 查询任务状态。
      *
      * @param taskId 提交任务返回的 task_id
-     * @return 查询响应 DTO（含 status 与 video_url）
+     * @return 查询响应 DTO（含 status 与 file_id；视频下载地址需用 file_id 调 retrieveFileUrl 换取）
      */
     public MiniMaxI2VQueryRespDTO queryTask(String taskId) {
         return miniMaxRestClient.get()
@@ -53,6 +56,28 @@ public class MiniMaxClient {
                         .build())
                 .retrieve()
                 .body(MiniMaxI2VQueryRespDTO.class);
+    }
+
+    /**
+     * 根据 file_id 换取文件（视频）下载地址。
+     * <p>
+     * MiniMax 查询任务仅返回 file_id，需调用本接口换取有时效的 download_url。
+     *
+     * @param fileId 查询任务返回的 file_id
+     * @return 视频下载地址；换取失败时返回 null
+     */
+    public String retrieveFileUrl(String fileId) {
+        MiniMaxFileRetrieveRespDTO resp = miniMaxRestClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path(FILE_RETRIEVE_PATH)
+                        .queryParam("file_id", fileId)
+                        .build())
+                .retrieve()
+                .body(MiniMaxFileRetrieveRespDTO.class);
+        if (resp != null && resp.getFile() != null) {
+            return resp.getFile().getDownloadUrl();
+        }
+        return null;
     }
 
     /** 获取默认模型名称，供 Service 组装请求时使用。 */
