@@ -1,38 +1,39 @@
 package com.example.gushingbackend.service;
 
-import com.example.gushingbackend.model.bo.VideoGenerationBO;
 import com.example.gushingbackend.model.bo.WorkflowTextToVideoBO;
 
 /**
  * AI 工作流服务接口。
  * <p>
- * 编排多个 AI 能力节点的串联/并行执行。当前定义文生文→文生图→图生视频（提交）的串联工作流，
- * 以及按 taskId 查询视频结果的接口。
+ * 编排多个 AI 能力节点的串联执行。当前定义文生文→文生图→多段图生视频→拼接的工作流，
+ * 支持按总时长拆分为 5 秒最小生成单元，循环生成后按顺序拼接。
  */
 public interface WorkflowService {
 
     /**
-     * 文生文 → 文生图 → 图生视频（仅提交）串联工作流。
+     * 提交文生文 → 文生图 → 多段图生视频 → 拼接 工作流（异步执行）。
      * <p>
-     * 流程：输入 prompt → 调用文生文生成画面描述文本 → 将文本作为 prompt 调用文生图
-     * 生成图片 → 将图片 URL 作为首帧提交图生视频任务。
-     * <p>
-     * 视频生成耗时长，第 3 步仅提交任务即返回 taskId，不轮询等待；
-     * 调用方需用 {@link #queryVideoTask(String)} 按 taskId 查询最终视频结果。
+     * 方法立即返回，workflowId 已生成，workflowStatus=PROCESSING。
+     * 实际工作流在后台线程异步执行：
+     * <ol>
+     *   <li>文生文：生成共享图片描述 + 多段视频描述（LLM 分镜）</li>
+     *   <li>文生图：用图片描述生成一张共享参考图</li>
+     *   <li>图生视频：用共享参考图 + 各段视频描述，循环提交 N 个视频生成任务</li>
+     *   <li>轮询所有片段直至全部成功</li>
+     *   <li>FFmpeg 拼接所有片段为完整视频</li>
+     * </ol>
+     * 调用方需用 {@link #queryWorkflow(String)} 按 workflowId 查询最终结果。
      *
-     * @param bo 工作流业务对象，至少需提供 prompt（原始输入）
-     * @return 写入各阶段结果的工作流业务对象（textContent / imageUrl / videoTaskId 等，videoUrl 未填充）
+     * @param bo 工作流业务对象，需提供 prompt 与 duration
+     * @return 写入 workflowId 与 workflowStatus=PROCESSING 的工作流 BO
      */
     WorkflowTextToVideoBO textToVideo(WorkflowTextToVideoBO bo);
 
     /**
-     * 按 taskId 查询图生视频任务状态与结果。
-     * <p>
-     * 单次查询，不轮询。配合 {@link #textToVideo(WorkflowTextToVideoBO)} 返回的 taskId 使用，
-     * 前端可轮询调用本方法直至 status=Success 拿到 videoUrl。
+     * 按 workflowId 查询工作流整体状态与结果。
      *
-     * @param taskId 图生视频任务 ID
-     * @return 写入 status / videoUrl 的视频业务对象
+     * @param workflowId 工作流 ID
+     * @return 工作流 BO（包含各片段进度与最终拼接视频 URL）
      */
-    VideoGenerationBO queryVideoTask(String taskId);
+    WorkflowTextToVideoBO queryWorkflow(String workflowId);
 }

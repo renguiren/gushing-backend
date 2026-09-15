@@ -24,6 +24,8 @@ import com.example.gushingbackend.model.dto.DeepSeekRespDTO.DeepSeekChoiceDTO;
 import com.example.gushingbackend.model.dto.DeepSeekRespDTO.DeepSeekUsageDTO;
 import com.example.gushingbackend.model.dto.MiniMaxI2VQueryRespDTO;
 import com.example.gushingbackend.model.dto.MiniMaxI2VSubmitReqDTO;
+import com.example.gushingbackend.model.dto.MiniMaxI2VSubmitReqDTO.ContentElementDTO;
+import com.example.gushingbackend.model.dto.MiniMaxI2VSubmitReqDTO.ImageUrlDTO;
 import com.example.gushingbackend.model.dto.MiniMaxI2VSubmitRespDTO;
 import com.example.gushingbackend.service.AiService;
 import java.util.ArrayList;
@@ -40,10 +42,10 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class AiServiceImpl implements AiService {
 
-    /** MiniMax 任务最终成功状态 */
-    private static final String STATUS_SUCCESS = "Success";
-    /** MiniMax 任务失败状态 */
-    private static final String STATUS_FAILED = "Failed";
+    /** MiniMax V2 任务最终成功状态 */
+    private static final String STATUS_SUCCESS = "succeeded";
+    /** MiniMax V2 任务失败状态 */
+    private static final String STATUS_FAILED = "failed";
 
     private final DeepSeekClient deepSeekClient;
     private final DashScopeClient dashScopeClient;
@@ -78,15 +80,12 @@ public class AiServiceImpl implements AiService {
         MiniMaxI2VSubmitReqDTO reqDTO = buildVideoRequest(bo);
         MiniMaxI2VSubmitRespDTO submitResp = miniMaxClient.submitTask(reqDTO);
         if (submitResp == null || !StringUtils.hasText(submitResp.getTaskId())) {
-            String msg = (submitResp != null && submitResp.getBaseResp() != null)
-                    ? submitResp.getBaseResp().getStatusMsg()
-                    : "提交 MiniMax 图生视频任务失败";
-            throw new RuntimeException(msg);
+            throw new RuntimeException("提交 MiniMax 视频生成任务失败");
         }
         bo.setTaskId(submitResp.getTaskId());
         bo.setModel(reqDTO.getModel());
-        // 提交后标记为已提交，等待调用方按 taskId 查询最终结果
-        bo.setStatus("Submitted");
+        // 提交后标记为排队中，等待调用方按 taskId 查询最终结果
+        bo.setStatus("queued");
         return bo;
     }
 
@@ -94,16 +93,6 @@ public class AiServiceImpl implements AiService {
     public VideoGenerationBO queryVideoTask(VideoGenerationBO bo) {
         MiniMaxI2VQueryRespDTO resp = miniMaxClient.queryTask(bo.getTaskId());
         fillVideoResponse(bo, resp);
-        // 任务成功且拿到 file_id → 调用 file retrieve 换取视频下载地址
-        // MiniMax 查询任务只返回 file_id，视频地址需二次换取
-        if (resp != null
-                && STATUS_SUCCESS.equals(resp.getStatus())
-                && StringUtils.hasText(resp.getFileId())) {
-            String downloadUrl = miniMaxClient.retrieveFileUrl(resp.getFileId());
-            if (StringUtils.hasText(downloadUrl)) {
-                bo.setVideoUrl(downloadUrl);
-            }
-        }
         return bo;
     }
 
@@ -230,15 +219,34 @@ public class AiServiceImpl implements AiService {
 
     // ===== 图生视频 =====
 
-    /** 将 BO 输入转换为 MiniMax 图生视频提交请求 DTO。 */
+    /** 将 BO 输入转换为 MiniMax V2 视频生成提交请求 DTO（content[] 数组）。 */
     private MiniMaxI2VSubmitReqDTO buildVideoRequest(VideoGenerationBO bo) {
-        MiniMaxI2VSubmitReqDTO reqDTO = new MiniMaxI2VSubmitReqDTO();
-        reqDTO.setPrompt(bo.getPrompt());
-        reqDTO.setFirstFrameImage(bo.getFirstFrameImage());
-        if (StringUtils.hasText(bo.getLastFrameImage())) {
-            reqDTO.setLastFrameImage(bo.getLastFrameImage());
+        List<ContentElementDTO> content = new ArrayList<>();
+
+        // 1. 文本描述元素
+        ContentElementDTO textElem = new ContentElementDTO();
+        textElem.setType("text");
+        textElem.setText(bo.getPrompt());
+        content.add(textElem);
+
+        // 2. 参考图元素（role=reference_image）
+        if (bo.getSubjectReference() != null) {
+            for (String url : bo.getSubjectReference()) {
+                if (StringUtils.hasText(url)) {
+                    ContentElementDTO imgElem = new ContentElementDTO();
+                    imgElem.setType("image_url");
+                    ImageUrlDTO imgUrl = new ImageUrlDTO();
+                    imgUrl.setUrl(url);
+                    imgElem.setImageUrl(imgUrl);
+                    imgElem.setRole("reference_image");
+                    content.add(imgElem);
+                }
+            }
         }
+
+        MiniMaxI2VSubmitReqDTO reqDTO = new MiniMaxI2VSubmitReqDTO();
         reqDTO.setModel(miniMaxClient.getDefaultI2VModel());
+        reqDTO.setContent(content);
         reqDTO.setDuration(bo.getDuration() != null ? bo.getDuration() : miniMaxClient.getDefaultI2VDuration());
         if (StringUtils.hasText(bo.getResolution())) {
             reqDTO.setResolution(bo.getResolution());
@@ -276,11 +284,16 @@ public class AiServiceImpl implements AiService {
         throw new RuntimeException("MiniMax 图生视频任务轮询超时，taskId=" + bo.getTaskId());
     }
 
-    /** 将 MiniMax 查询响应 DTO 的 status 写回 BO。视频下载地址由 queryVideoTask 单独换取。 */
+    /** 将 MiniMax V2 查询响应 DTO 的 task.status 与 task.content.url 写回 BO。 */
     private void fillVideoResponse(VideoGenerationBO bo, MiniMaxI2VQueryRespDTO resp) {
-        if (resp == null) {
+        if (resp == null || resp.getTask() == null) {
             return;
         }
-        bo.setStatus(resp.getStatus());
+        MiniMaxI2VQueryRespDTO.TaskDTO task = resp.getTask();
+        bo.setStatus(task.getStatus());
+        // V2 成功后直接返回 task.content.url，无需像 V1 那样用 file_id 二次换取
+        if (task.getContent() != null && StringUtils.hasText(task.getContent().getUrl())) {
+            bo.setVideoUrl(task.getContent().getUrl());
+        }
     }
 }

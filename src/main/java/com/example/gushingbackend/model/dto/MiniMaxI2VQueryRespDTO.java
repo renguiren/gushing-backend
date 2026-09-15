@@ -1,27 +1,43 @@
 package com.example.gushingbackend.model.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;
 
 /**
- * MiniMax 视频生成查询响应 DTO。
- * 接口：GET /v1/query/video_generation?task_id=xxx
- * 字段映射遵循 MiniMax V1 接口的 snake_case 约定。
+ * MiniMax V2 视频生成查询响应 DTO。
+ * 接口：GET /v2/query/video_generation/{task_id}
+ * <p>
+ * V2 查询响应将任务信息嵌套在 task 对象中，成功后 content.url 即为视频下载地址，
+ * 无需再像 V1 那样用 file_id 二次换取。
  */
 @Data
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class MiniMaxI2VQueryRespDTO {
 
-    /** 任务 ID */
-    @com.fasterxml.jackson.annotation.JsonProperty("task_id")
-    private String taskId;
+    /** 任务信息 */
+    private TaskDTO task;
 
-    /** 文件 ID（任务成功后返回，用于调用 file retrieve 换取视频下载地址） */
-    @com.fasterxml.jackson.annotation.JsonProperty("file_id")
-    private String fileId;
+    /**
+     * 任务信息 DTO。
+     */
+    @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class TaskDTO {
+        /** 任务状态：queued / running / succeeded / failed / cancelled */
+        private String status;
+        /** 成片内容（status=succeeded 时包含视频下载地址） */
+        private ContentDTO content;
+        /** 失败时的错误信息 */
+        private String error;
+    }
 
-    /** 任务状态：Submitted / Processing / Success / Failed */
-    private String status;
-
-    /** 查询结果基础状态 */
-    @com.fasterxml.jackson.annotation.JsonProperty("base_resp")
-    private MiniMaxI2VSubmitRespDTO.BaseRespDTO baseResp;
+    /**
+     * 成片内容 DTO。
+     */
+    @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ContentDTO {
+        /** 视频下载地址 */
+        private String url;
+    }
 }

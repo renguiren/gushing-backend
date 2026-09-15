@@ -17,11 +17,21 @@ ai:
     t2i-size: ${DASHSCOPE_T2I_SIZE:1280*1280}
     timeout-seconds: ${DASHSCOPE_TIMEOUT_SECONDS:120}
   minimax:
-    # MiniMax 海螺 图生视频（同样通过 .env 注入）
+    # MiniMax H3 视频生成（V2 多模态 content 数组，通过 .env 注入）
     api-key: ${MINIMAX_API_KEY}
     base-url: ${MINIMAX_BASE_URL:https://api.minimax.cn}
-    i2v-model: ${MINIMAX_I2V_MODEL:MiniMax-Hailuo-2.3}
-    i2v-duration: ${MINIMAX_I2V_DURATION:6}
-    i2v-resolution: ${MINIMAX_I2V_RESOLUTION:1080P}
+    i2v-model: ${MINIMAX_I2V_MODEL:MiniMax-H3}
+    i2v-duration: ${MINIMAX_I2V_DURATION:5}
+    i2v-resolution: ${MINIMAX_I2V_RESOLUTION:768P}
     poll-interval-seconds: ${MINIMAX_POLL_INTERVAL_SECONDS:5}
     poll-max-seconds: ${MINIMAX_POLL_MAX_SECONDS:300}
+
+workflow:
+  # 单个视频片段的最小生成单元时长（秒），固定为 5
+  segment-duration-seconds: ${WORKFLOW_SEGMENT_DURATION_SECONDS:5}
+  # 拼接后视频的本地存储目录
+  video-output-dir: ${WORKFLOW_VIDEO_OUTPUT_DIR:./data/videos}
+  # FFmpeg 可执行文件路径，默认从 PATH 查找
+  ffmpeg-path: ${WORKFLOW_FFMPEG_PATH:ffmpeg}
+  # 视频片段下载超时时间（秒）
+  download-timeout-seconds: ${WORKFLOW_DOWNLOAD_TIMEOUT_SECONDS:120}

@@ -67,7 +67,7 @@ public class AiController {
      * 由于 MiniMax 视频生成为异步任务，该接口在内部提交后轮询直至任务完成，
      * 对调用方表现为同步返回（受轮询最大等待时长限制）。
      *
-     * @param reqVO 前端入参（prompt + firstFrameImage 必填，lastFrameImage/duration/resolution 可选）
+     * @param reqVO 前端入参（prompt + subjectReference 必填，duration/resolution 可选）
      * @return 生成视频 URL、模型、taskId 与状态
      */
     @PostMapping("/video-generation")
@@ -127,8 +127,7 @@ public class AiController {
     private VideoGenerationBO toVideoBO(VideoGenerationReqVO reqVO) {
         VideoGenerationBO bo = new VideoGenerationBO();
         bo.setPrompt(reqVO.getPrompt());
-        bo.setFirstFrameImage(reqVO.getFirstFrameImage());
-        bo.setLastFrameImage(reqVO.getLastFrameImage());
+        bo.setSubjectReference(reqVO.getSubjectReference());
         bo.setDuration(reqVO.getDuration());
         bo.setResolution(reqVO.getResolution());
         return bo;

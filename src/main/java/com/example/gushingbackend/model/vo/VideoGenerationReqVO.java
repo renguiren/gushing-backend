@@ -1,11 +1,13 @@
 package com.example.gushingbackend.model.vo;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
+import java.util.List;
 import lombok.Data;
 
 /**
- * 图生视频请求 VO（面向前端）。
+ * 主体参考视频生成请求 VO（面向前端）。
  */
 @Data
 public class VideoGenerationReqVO {
@@ -15,12 +17,9 @@ public class VideoGenerationReqVO {
     @Size(max = 2000, message = "提示词长度超出限制")
     private String prompt;
 
-    /** 首帧图片 URL，图生视频必填 */
-    @NotBlank(message = "首帧图片不能为空")
-    private String firstFrameImage;
-
-    /** 尾帧图片 URL，可选 */
-    private String lastFrameImage;
+    /** 主体参考图片 URL 列表，必填（至少 1 张） */
+    @NotEmpty(message = "主体参考图片不能为空")
+    private List<String> subjectReference;
 
     /** 视频时长（秒），6 或 10；不传使用默认配置 */
     private Integer duration;
